@@ -1,8 +1,11 @@
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
     const { url } = req.query;
-    if (!url) return res.status(400).json({ ok: false, error: "Missing url" });
+
+    if (!url) {
+        return res.status(400).json({ ok: false, error: "Missing url" });
+    }
 
     const FASTSAVER_API = "https://beta.fastsaverapi.com/media/info";
     const API_KEY = process.env.FASTSAVER_API_KEY;
@@ -20,4 +23,4 @@ module.exports = async (req, res) => {
     } catch (err) {
         res.status(500).json({ ok: false, error: err.message });
     }
-};
+}
