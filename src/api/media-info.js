@@ -1,5 +1,6 @@
-// src/api/media-info.js
-export default async function handler(req, res) {
+const fetch = require('node-fetch');
+
+module.exports = async (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ ok: false, error: "Missing url" });
 
@@ -8,23 +9,15 @@ export default async function handler(req, res) {
 
     try {
         const apiRes = await fetch(`${FASTSAVER_API}?url=${encodeURIComponent(url)}`, {
-            method: "GET",
             headers: {
                 "api-key": API_KEY,
                 "accept": "application/json",
             },
         });
 
-        const text = await apiRes.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch {
-            return res.status(500).json({ ok: false, error: "Invalid JSON from provider" });
-        }
-
+        const data = await apiRes.json();
         res.json(data);
     } catch (err) {
         res.status(500).json({ ok: false, error: err.message });
     }
-}
+};
