@@ -23,9 +23,21 @@ function App() {
         setError("");
 
         try {
-            const res = await fetch(`${API_BASE}/media-info?url=${encodeURIComponent(url)}`);
+            // Determine which API to use based on URL
+            let apiEndpoint;
+
+            if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                apiEndpoint = 'youtube-download';
+            } else {
+                apiEndpoint = 'media-info';
+            }
+
+            console.log("🌐 Calling endpoint:", `${API_BASE}/${apiEndpoint}?url=${encodeURIComponent(url)}`);
+
+            const res = await fetch(`${API_BASE}/${apiEndpoint}?url=${encodeURIComponent(url)}`);
             const data = await res.json();
-            console.log("🎬 Full API Response:", data); // Add this line
+
+            console.log("📡 API Response:", data);
 
             if (data.ok === false) {
                 setError(data.error || "Could not fetch media. Please check the link and try again.");
@@ -39,6 +51,33 @@ function App() {
             setLoading(false);
         }
     };
+    // const fetchMediaInfo = async () => {
+    //     if (!url.trim()) {
+    //         setError("Please paste a video link");
+    //         return;
+    //     }
+    //
+    //     setLoading(true);
+    //     setMedia(null);
+    //     setError("");
+    //
+    //     try {
+    //         const res = await fetch(`${API_BASE}/media-info?url=${encodeURIComponent(url)}`);
+    //         const data = await res.json();
+    //         console.log("🎬 Full API Response:", data); // Add this line
+    //
+    //         if (data.ok === false) {
+    //             setError(data.error || "Could not fetch media. Please check the link and try again.");
+    //         } else {
+    //             setMedia(data);
+    //         }
+    //     } catch (err) {
+    //         console.error("❌ Frontend error:", err);
+    //         setError("Something went wrong. Please try again.");
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !loading) {
