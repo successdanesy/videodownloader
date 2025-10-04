@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     try {
         console.log('🔧 Getting YouTube info first...');
 
-        // Step 1: First get the video info to get bot_username
+        // Step 1: First get the video info
         const infoResponse = await fetch(`${FASTSAVER_API}/youtube/info?url=${encodeURIComponent(url)}`, {
             method: "GET",
             headers: {
@@ -32,75 +32,89 @@ export default async function handler(req, res) {
             throw new Error('Invalid JSON from YouTube info endpoint');
         }
 
-        // Check if info endpoint worked
-        if (infoData.error === true || !infoData.bot_username) {
-            console.log('❌ No bot_username from info endpoint');
-            throw new Error('Could not get required bot information');
-        }
+        console.log('📡 Info data keys:', Object.keys(infoData));
 
-        console.log('✅ Got bot_username:', infoData.bot_username);
+        // Step 2: Try download with different bot_usernames
+        const possibleBots = [
+            "@the_saverbot", // From the documentation example
+            "@fastsaverbot",
+            "@saverbot",
+            "the_saverbot", // Without @
+            "fastsaverbot"
+        ];
 
-        // Step 2: Now request download with bot_username
-        const downloadResponse = await fetch(`${FASTSAVER_API}/youtube/download`, {
-            method: "POST",
-            headers: {
-                "api-key": API_KEY,
-                "accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                url: url,
-                format: "mp4",
-                bot_username: infoData.bot_username // Required field!
-            })
-        });
+        for (const botUsername of possibleBots) {
+            console.log(`🔧 Trying bot_username: ${botUsername}`);
 
-        console.log('📡 Download response status:', downloadResponse.status);
-
-        const responseText = await downloadResponse.text();
-        console.log("📡 Download Response:", responseText);
-
-        // Handle different response types
-        if (responseText.startsWith('http')) {
-            // Direct download URL
-            console.log('✅ Got direct download URL');
-            return res.json({
-                ok: true,
-                source: 'youtube',
-                type: 'video',
-                title: 'YouTube Video',
-                thumbnail: `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
-                download_url: responseText,
-                caption: 'YouTube video download',
-                author: 'YouTube'
-            });
-        }
-
-        // Try to parse as JSON
-        try {
-            const data = JSON.parse(responseText);
-            console.log('📡 Parsed download data:', JSON.stringify(data, null, 2));
-
-            if (data.download_url || data.url) {
-                console.log('✅ Got download URL from JSON');
-                return res.json({
-                    ok: true,
-                    source: 'youtube',
-                    type: 'video',
-                    title: data.title || 'YouTube Video',
-                    thumbnail: data.thumbnail || `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
-                    download_url: data.download_url || data.url,
-                    caption: data.caption || 'YouTube video download',
-                    author: data.author || 'YouTube'
+            try {
+                const downloadResponse = await fetch(`${FASTSAVER_API}/youtube/download`, {
+                    method: "POST",
+                    headers: {
+                        "api-key": API_KEY,
+                        "accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        url: url,
+                        format: "mp4",
+                        bot_username: botUsername
+                    })
                 });
-            } else {
-                console.log('❌ No download URL in response');
-                throw new Error('No download URL received');
+
+                console.log(`📡 Download response status for ${botUsername}:`, downloadResponse.status);
+
+                const responseText = await downloadResponse.text();
+                console.log(`📡 Download Response for ${botUsername}:`, responseText);
+
+                // If we get a successful response (not 422)
+                if (downloadResponse.status !== 422) {
+                    // Handle direct URL
+                    if (responseText.startsWith('http')) {
+                        console.log('✅ Got direct download URL with bot:', botUsername);
+                        return res.json({
+                            ok: true,
+                            source: 'youtube',
+                            type: 'video',
+                            title: infoData.title || 'YouTube Video',
+                            thumbnail: infoData.thumbnails?.max || infoData.thumbnails?.low || `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
+                            download_url: responseText,
+                            caption: infoData.title,
+                            author: infoData.channel || 'YouTube'
+                        });
+                    }
+
+                    // Try to parse as JSON
+                    try {
+                        const data = JSON.parse(responseText);
+                        console.log('📡 Parsed download data:', JSON.stringify(data, null, 2));
+
+                        if (data.download_url || data.url) {
+                            console.log('✅ Got download URL from JSON with bot:', botUsername);
+                            return res.json({
+                                ok: true,
+                                source: 'youtube',
+                                type: 'video',
+                                title: infoData.title || data.title || 'YouTube Video',
+                                thumbnail: infoData.thumbnails?.max || infoData.thumbnails?.low || data.thumbnail || `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
+                                download_url: data.download_url || data.url,
+                                caption: infoData.title || data.caption,
+                                author: infoData.channel || data.author || 'YouTube'
+                            });
+                        }
+                    } catch (parseError) {
+                        console.log('❌ Response is not JSON for bot:', botUsername);
+                    }
+                } else {
+                    console.log(`❌ Bot ${botUsername} returned 422`);
+                }
+            } catch (botError) {
+                console.log(`❌ Error with bot ${botUsername}:`, botError.message);
             }
-        } catch (parseError) {
-            console.log('❌ Download response is not JSON or URL');
-            throw new Error('Invalid download response format');
         }
+
+        // If all bots failed
+        console.log('❌ All bot_usernames failed');
+        throw new Error('No working bot_username found');
 
     } catch (err) {
         console.error('❌ YouTube API error:', err);
