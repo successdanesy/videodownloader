@@ -12,6 +12,18 @@ function App() {
         ? 'http://localhost:5000/api'
         : '/api';
 
+    // Add this function to proxy thumbnails
+    const getProxiedThumbnail = (thumbnailUrl) => {
+        if (!thumbnailUrl) return null;
+
+        // Only proxy Instagram thumbnails (you can add other domains if needed)
+        if (thumbnailUrl.includes('instagram.com') || thumbnailUrl.includes('cdninstagram.com')) {
+            return `/api/thumbnail-proxy?url=${encodeURIComponent(thumbnailUrl)}`;
+        }
+
+        return thumbnailUrl;
+    };
+
     const fetchMediaInfo = async () => {
         if (!url.trim()) {
             setError("Please paste a video link");
@@ -51,33 +63,6 @@ function App() {
             setLoading(false);
         }
     };
-    // const fetchMediaInfo = async () => {
-    //     if (!url.trim()) {
-    //         setError("Please paste a video link");
-    //         return;
-    //     }
-    //
-    //     setLoading(true);
-    //     setMedia(null);
-    //     setError("");
-    //
-    //     try {
-    //         const res = await fetch(`${API_BASE}/media-info?url=${encodeURIComponent(url)}`);
-    //         const data = await res.json();
-    //         console.log("🎬 Full API Response:", data); // Add this line
-    //
-    //         if (data.ok === false) {
-    //             setError(data.error || "Could not fetch media. Please check the link and try again.");
-    //         } else {
-    //             setMedia(data);
-    //         }
-    //     } catch (err) {
-    //         console.error("❌ Frontend error:", err);
-    //         setError("Something went wrong. Please try again.");
-    //     } finally {
-    //         setLoading(false);
-    //     }
-    // };
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !loading) {
@@ -137,8 +122,8 @@ function App() {
                                 }`}
                                 title={platform.downloadable ? 'Supports download' : 'Preview only'}
                             >
-            {platform.name} {platform.downloadable ? '✓' : '👀'}
-        </span>
+                                {platform.name} {platform.downloadable ? '✓' : '👀'}
+                            </span>
                         ))}
                     </div>
                 </div>
@@ -201,13 +186,19 @@ function App() {
                     {/* Results */}
                     {media && media.ok !== false && (
                         <div className="mt-6 sm:mt-8 bg-white rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-                            {/* Thumbnail */}
+                            {/* Thumbnail - Updated to use proxy */}
                             {media.thumbnail && (
                                 <div className="relative aspect-video bg-gray-100">
                                     <img
-                                        src={media.thumbnail}
+                                        src={getProxiedThumbnail(media.thumbnail)}
                                         alt="Video thumbnail"
                                         className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            // Fallback if proxy fails - use original URL
+                                            if (e.target.src !== media.thumbnail) {
+                                                e.target.src = media.thumbnail;
+                                            }
+                                        }}
                                     />
                                     <div className="absolute top-3 sm:top-4 left-3 sm:left-4 px-3 py-1.5 sm:px-4 sm:py-2 bg-black/70 backdrop-blur-sm rounded-lg sm:rounded-xl text-white text-xs sm:text-sm font-semibold">
                                         {media.source || "Unknown"}
