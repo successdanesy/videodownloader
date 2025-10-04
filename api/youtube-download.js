@@ -11,8 +11,36 @@ export default async function handler(req, res) {
     const API_KEY = process.env.FASTSAVER_API_KEY;
 
     try {
-        console.log('🔧 Testing YouTube download endpoint...');
+        console.log('🔧 Getting YouTube info first...');
 
+        // Step 1: First get the video info to get bot_username
+        const infoResponse = await fetch(`${FASTSAVER_API}/youtube/info?url=${encodeURIComponent(url)}`, {
+            method: "GET",
+            headers: {
+                "api-key": API_KEY,
+                "accept": "application/json",
+            },
+        });
+
+        const infoText = await infoResponse.text();
+        console.log("📡 YouTube Info Response:", infoText);
+
+        let infoData;
+        try {
+            infoData = JSON.parse(infoText);
+        } catch {
+            throw new Error('Invalid JSON from YouTube info endpoint');
+        }
+
+        // Check if info endpoint worked
+        if (infoData.error === true || !infoData.bot_username) {
+            console.log('❌ No bot_username from info endpoint');
+            throw new Error('Could not get required bot information');
+        }
+
+        console.log('✅ Got bot_username:', infoData.bot_username);
+
+        // Step 2: Now request download with bot_username
         const downloadResponse = await fetch(`${FASTSAVER_API}/youtube/download`, {
             method: "POST",
             headers: {
@@ -22,19 +50,19 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 url: url,
-                format: "mp4"
+                format: "mp4",
+                bot_username: infoData.bot_username // Required field!
             })
         });
 
-        console.log('📡 Response status:', downloadResponse.status);
-        console.log('📡 Response headers:', downloadResponse.headers);
+        console.log('📡 Download response status:', downloadResponse.status);
 
         const responseText = await downloadResponse.text();
-        console.log("📡 RAW YouTube API Response:", responseText);
-        console.log("📡 Response length:", responseText.length);
+        console.log("📡 Download Response:", responseText);
 
-        // Check if it's a direct URL
+        // Handle different response types
         if (responseText.startsWith('http')) {
+            // Direct download URL
             console.log('✅ Got direct download URL');
             return res.json({
                 ok: true,
@@ -51,7 +79,7 @@ export default async function handler(req, res) {
         // Try to parse as JSON
         try {
             const data = JSON.parse(responseText);
-            console.log('📡 Parsed JSON data:', JSON.stringify(data, null, 2));
+            console.log('📡 Parsed download data:', JSON.stringify(data, null, 2));
 
             if (data.download_url || data.url) {
                 console.log('✅ Got download URL from JSON');
@@ -66,16 +94,13 @@ export default async function handler(req, res) {
                     author: data.author || 'YouTube'
                 });
             } else {
-                console.log('❌ No download URL in JSON response');
-                console.log('❌ Response keys:', Object.keys(data));
+                console.log('❌ No download URL in response');
+                throw new Error('No download URL received');
             }
         } catch (parseError) {
-            console.log('❌ Response is not JSON:', parseError.message);
+            console.log('❌ Download response is not JSON or URL');
+            throw new Error('Invalid download response format');
         }
-
-        // If we get here, no download URL was found
-        console.log('❌ No valid download URL received from API');
-        throw new Error('YouTube download not available');
 
     } catch (err) {
         console.error('❌ YouTube API error:', err);
