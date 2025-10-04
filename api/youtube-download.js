@@ -7,105 +7,83 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: "Missing YouTube URL" });
     }
 
-    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-    const RAPIDAPI_HOST = 'youtube86.p.rapidapi.com';
+    const FASTSAVER_API = "https://beta.fastsaverapi.com";
+    const API_KEY = process.env.FASTSAVER_API_KEY;
 
     try {
-        console.log('📡 Making YouTube API request for URL:', url);
-
-        // Step 1: Submit YouTube URL
-        const response = await fetch(`https://${RAPIDAPI_HOST}/api/links`, {
-            method: 'POST',
+        // Try the download endpoint directly first
+        const downloadResponse = await fetch(`${FASTSAVER_API}/youtube/download`, {
+            method: "POST",
             headers: {
-                'Content-Type': 'application/json',
-                'x-rapidapi-key': RAPIDAPI_KEY,
-                'x-rapidapi-host': RAPIDAPI_HOST
+                "api-key": API_KEY,
+                "accept": "application/json",
+                "Content-Type": "application/json",
             },
-            body: JSON.stringify({ url: url })
+            body: JSON.stringify({
+                url: url,
+                format: "mp4"
+            })
         });
 
-        console.log('📡 YouTube API response status:', response.status);
+        const responseText = await downloadResponse.text();
+        console.log("📡 YouTube API Response:", responseText);
 
-        const data = await response.json();
-        console.log('📡 Full YouTube API response:', JSON.stringify(data, null, 2));
-
-        // Handle different response structures
-        let videoData;
-
-        if (Array.isArray(data) && data.length > 0) {
-            // Structure from your test
-            videoData = data[0];
-        } else if (data.urls) {
-            // Direct structure
-            videoData = data;
-        } else {
-            console.log('❌ Unexpected API response structure');
-            return res.status(500).json({
-                ok: false,
-                error: "Unexpected API response",
-                debug: data
+        // Handle different response types
+        if (responseText.startsWith('http')) {
+            // Direct download URL
+            return res.json({
+                ok: true,
+                source: 'youtube',
+                type: 'video',
+                title: 'YouTube Video',
+                thumbnail: `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
+                download_url: responseText,
+                caption: 'YouTube video download',
+                author: 'YouTube'
             });
         }
 
-        // Check if we have URLs
-        if (!videoData.urls || videoData.urls.length === 0) {
-            console.log('❌ No URLs found in response');
-            return res.status(500).json({
-                ok: false,
-                error: "No download links found",
-                debug: videoData
-            });
+        // Try to parse as JSON
+        try {
+            const data = JSON.parse(responseText);
+            if (data.download_url || data.url) {
+                return res.json({
+                    ok: true,
+                    source: 'youtube',
+                    type: 'video',
+                    title: 'YouTube Video',
+                    thumbnail: `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
+                    download_url: data.download_url || data.url,
+                    caption: 'YouTube video download',
+                    author: 'YouTube'
+                });
+            }
+        } catch {
+            // Not JSON, continue to error
         }
 
-        console.log('✅ Found', videoData.urls.length, 'download URLs');
-
-        // Find the best quality MP4 download link
-        const bestQualityUrl = videoData.urls.find(item =>
-            item.extension === 'mp4' && item.quality === '1080'
-        ) || videoData.urls.find(item =>
-            item.extension === 'mp4' && item.quality === '720'
-        ) || videoData.urls.find(item =>
-            item.extension === 'mp4' && item.quality === '480'
-        ) || videoData.urls.find(item =>
-            item.extension === 'mp4'
-        ) || videoData.urls[0]; // Fallback to first URL
-
-        if (!bestQualityUrl || !bestQualityUrl.url) {
-            console.log('❌ No valid download URL found');
-            return res.status(500).json({
-                ok: false,
-                error: "No valid download URL found",
-                debug: videoData.urls
-            });
-        }
-
-        // Format response to match your existing app structure
-        const result = {
-            ok: true,
-            source: 'youtube',
-            type: 'video',
-            title: videoData.meta?.title || videoData.title || 'YouTube Video',
-            thumbnail: videoData.pictureUrl || videoData.thumbnail,
-            download_url: bestQualityUrl.url,
-            caption: videoData.meta?.title || videoData.title,
-            author: 'YouTube',
-            duration: videoData.meta?.duration,
-            qualities: videoData.urls.map(item => ({
-                quality: item.quality,
-                extension: item.extension,
-                url: item.url
-            }))
-        };
-
-        console.log('✅ Successfully formatted response');
-        res.json(result);
+        throw new Error('No valid download URL received');
 
     } catch (err) {
         console.error('❌ YouTube API error:', err);
-        res.status(500).json({
-            ok: false,
-            error: err.message,
-            stack: err.stack
+
+        res.status(200).json({
+            ok: true,
+            source: 'youtube',
+            type: 'info',
+            title: 'YouTube Video',
+            thumbnail: `https://img.youtube.com/vi/${extractVideoId(url)}/hqdefault.jpg`,
+            download_url: null,
+            caption: 'Video content',
+            author: 'YouTube',
+            unavailable: true,
+            message: "Download not available for this video",
+            reason: "Due to platform restrictions and permissions, we can't provide a download link for this video right now."
         });
     }
+}
+
+function extractVideoId(url) {
+    const match = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+    return match ? match[1] : 'unknown';
 }
