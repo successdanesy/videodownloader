@@ -424,7 +424,7 @@ function App() {
                                 <span>WhatsApp</span>
                             </a>
                         </div>
-                        <p className="text-xs sm:text-sm text-gray-400">© 2025 Success Chukwuemeka. All rights reserved.</p>
+                        <p className="text-xs sm:text-sm text-gray-400">© {new Date().getFullYear()} Easy Video Downloader. All rights reserved.</p>
                     </div>
                 </div>
             </footer>
