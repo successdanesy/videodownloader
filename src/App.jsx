@@ -24,6 +24,32 @@ function App() {
         return thumbnailUrl;
     };
 
+    // Add this function to handle direct downloads
+    const handleDownload = async (downloadUrl, filename = 'video.mp4') => {
+        try {
+            // Create a temporary anchor element
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            link.target = '_blank';
+
+            // Trigger the download
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Fallback: If the above doesn't work, open in new tab
+            setTimeout(() => {
+                window.open(downloadUrl, '_blank');
+            }, 1000);
+
+        } catch (err) {
+            console.error('Download error:', err);
+            // Fallback to original behavior
+            window.open(downloadUrl, '_blank');
+        }
+    };
+
     const fetchMediaInfo = async () => {
         if (!url.trim()) {
             setError("Please paste a video link");
@@ -235,17 +261,14 @@ function App() {
 
                                 {/* Download Section */}
                                 {media.download_url ? (
-                                    // Platform supports downloads (Instagram, Facebook, etc.)
                                     <div className="space-y-3 sm:space-y-4">
-                                        <a
-                                            href={media.download_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        <button
+                                            onClick={() => handleDownload(media.download_url, `${media.source}-video.mp4`)}
                                             className="flex items-center justify-center gap-2 sm:gap-3 w-full px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold shadow-lg hover:shadow-xl hover:from-green-700 hover:to-emerald-700 transition-all transform hover:scale-[1.02] active:scale-[0.98] text-sm sm:text-base"
                                         >
                                             <Download className="w-5 h-5 sm:w-6 sm:h-6" />
-                                            Download Video
-                                        </a>
+                                            Download Video Now
+                                        </button>
 
                                         <button
                                             onClick={() => copyToClipboard(media.download_url)}
